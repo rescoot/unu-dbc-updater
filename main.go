@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"time"
 
@@ -96,18 +97,20 @@ func stopVehicleService() error {
 func prepareGPIOPower() error {
 	// Assuming GPIO 50 is available and not used by the vehicle service
 	// This might require running as root or with appropriate permissions
-	cmd1 := exec.Command("echo", "50", ">", "/sys/class/gpio/export")
-	err := cmd1.Run()
+
+	// Using os.WriteFile is more reliable than exec.Command with redirection
+	err := os.WriteFile("/sys/class/gpio/export", []byte("50"), 0644)
 	if err != nil {
 		// Ignore "device or resource busy" error if already exported
-		// This is a very fragile way to check for this error, but matches existing logic.
-		if err.Error() != "exit status 1" {
+		if !os.IsExist(err) {
 			return fmt.Errorf("failed to export GPIO 50: %w", err)
 		}
 	}
 
-	cmd2 := exec.Command("echo", "out", ">", "/sys/class/gpio/gpio50/direction")
-	err = cmd2.Run()
+	// Give the system a moment to set up the GPIO
+	time.Sleep(100 * time.Millisecond)
+
+	err = os.WriteFile("/sys/class/gpio/gpio50/direction", []byte("out"), 0644)
 	if err != nil {
 		return fmt.Errorf("failed to set GPIO 50 direction: %w", err)
 	}
@@ -115,13 +118,19 @@ func prepareGPIOPower() error {
 }
 
 func turnOnDBC() error {
-	cmd := exec.Command("echo", "1", ">", "/sys/class/gpio/gpio50/value")
-	return cmd.Run()
+	err := os.WriteFile("/sys/class/gpio/gpio50/value", []byte("1"), 0644)
+	if err != nil {
+		return fmt.Errorf("failed to turn on DBC: %w", err)
+	}
+	return nil
 }
 
 func turnOffDBC() error {
-	cmd := exec.Command("echo", "0", ">", "/sys/class/gpio/gpio50/value")
-	return cmd.Run()
+	err := os.WriteFile("/sys/class/gpio/gpio50/value", []byte("0"), 0644)
+	if err != nil {
+		return fmt.Errorf("failed to turn off DBC: %w", err)
+	}
+	return nil
 }
 
 func restartVehicleService() error {
