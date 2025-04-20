@@ -81,9 +81,16 @@ func main() {
 }
 
 func stopVehicleService() error {
-	cmd := exec.Command("systemctl", "stop", "librescoot-vehicle", "unu-vehicle")
-	// systemctl stop will return 0 even if a service doesn't exist, which is fine.
-	return cmd.Run()
+	cmd1 := exec.Command("systemctl", "stop", "librescoot-vehicle")
+	err1 := cmd1.Run()
+	cmd2 := exec.Command("systemctl", "stop", "unu-vehicle")
+	err2 := cmd2.Run()
+
+	// If both commands failed, return an error. Otherwise, consider it successful.
+	if err1 != nil && err2 != nil {
+		return fmt.Errorf("failed to stop both librescoot-vehicle (%v) and unu-vehicle (%v)", err1, err2)
+	}
+	return nil
 }
 
 func prepareGPIOPower() error {
@@ -93,7 +100,8 @@ func prepareGPIOPower() error {
 	err := cmd1.Run()
 	if err != nil {
 		// Ignore "device or resource busy" error if already exported
-		if err.Error() != "exit status 1" { // This is a very fragile way to check for this error
+		// This is a very fragile way to check for this error, but matches existing logic.
+		if err.Error() != "exit status 1" {
 			return fmt.Errorf("failed to export GPIO 50: %w", err)
 		}
 	}
@@ -117,9 +125,16 @@ func turnOffDBC() error {
 }
 
 func restartVehicleService() error {
-	cmd := exec.Command("systemctl", "start", "librescoot-vehicle", "unu-vehicle")
-	// systemctl start will return 0 even if a service doesn't exist, which is fine.
-	return cmd.Run()
+	cmd1 := exec.Command("systemctl", "start", "librescoot-vehicle")
+	err1 := cmd1.Run()
+	cmd2 := exec.Command("systemctl", "start", "unu-vehicle")
+	err2 := cmd2.Run()
+
+	// If both commands failed, return an error. Otherwise, consider it successful.
+	if err1 != nil && err2 != nil {
+		return fmt.Errorf("failed to start both librescoot-vehicle (%v) and unu-vehicle (%v)", err1, err2)
+	}
+	return nil
 }
 
 func monitorAndResetDashboardReady(ctx context.Context) error {
