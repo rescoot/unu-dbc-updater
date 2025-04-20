@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -10,7 +11,16 @@ import (
 	"github.com/go-redis/redis/v8"
 )
 
+const (
+	defaultUpdateTimeout = 30 * time.Minute
+	lockFilePath         = "/tmp/dbc-update.lock"
+)
+
 func main() {
+	// Parse command line arguments
+	updateTimeout := flag.Duration("update-timeout", defaultUpdateTimeout, "Maximum time to wait for update to complete")
+	flag.Parse()
+
 	fmt.Println("DBC Updater Tool")
 
 	// Step 1: Stop vehicle service
@@ -61,7 +71,16 @@ func main() {
 	}
 	fmt.Println("BLE pin-code set to UPDATE.")
 
-	// Step 6: Run the update process
+	// Step 6: Create lock file
+	fmt.Println("Creating update lock file...")
+	err = createLockFile()
+	if err != nil {
+		fmt.Printf("Error creating lock file: %v\n", err)
+		return
+	}
+	fmt.Println("Lock file created.")
+
+	// Step 7: Run the update process
 	fmt.Println("Starting update process (Placeholder)...")
 	// TODO: Integrate SMUT or other update mechanism
 
@@ -69,7 +88,24 @@ func main() {
 	time.Sleep(5 * time.Second)
 	fmt.Println("Update process finished (Simulated).")
 
-	// Step 7: Clear BLE pin-code
+	// Step 8: Wait for lock file to be deleted or timeout
+	fmt.Println("Waiting for update to complete (lock file to be deleted)...")
+	updateCtx, updateCancel := context.WithTimeout(context.Background(), *updateTimeout)
+	defer updateCancel()
+	err = waitForLockFileRemoval(updateCtx)
+	if err != nil {
+		fmt.Printf("Error waiting for lock file removal: %v\n", err)
+		// If it's a timeout, we'll remove the lock file ourselves
+		if err == context.DeadlineExceeded {
+			fmt.Println("Update timeout reached. Removing lock file...")
+			if removeErr := os.Remove(lockFilePath); removeErr != nil {
+				fmt.Printf("Error removing lock file: %v\n", removeErr)
+			}
+		}
+	}
+	fmt.Println("Update completed.")
+
+	// Step 9: Clear BLE pin-code
 	fmt.Println("Clearing BLE pin-code...")
 	err = clearBLEPinCode(ctx)
 	if err != nil {
@@ -78,7 +114,7 @@ func main() {
 	}
 	fmt.Println("BLE pin-code cleared.")
 
-	// Step 8: Turn off DBC
+	// Step 10: Turn off DBC
 	fmt.Println("Turning off DBC...")
 	err = turnOffDBC()
 	if err != nil {
@@ -87,7 +123,7 @@ func main() {
 	}
 	fmt.Println("DBC turned off.")
 
-	// Step 9: Restart vehicle service
+	// Step 11: Restart vehicle service
 	fmt.Println("Restarting vehicle service...")
 	err = restartVehicleService()
 	if err != nil {
@@ -195,6 +231,43 @@ func clearBLEPinCode(ctx context.Context) error {
 		return fmt.Errorf("failed to clear BLE pin-code: %w", err)
 	}
 	return nil
+}
+
+func createLockFile() error {
+	// Create an empty file at the lock file path
+	file, err := os.Create(lockFilePath)
+	if err != nil {
+		return fmt.Errorf("failed to create lock file: %w", err)
+	}
+	defer file.Close()
+
+	// Write the current timestamp to the file
+	timestamp := fmt.Sprintf("%d", time.Now().Unix())
+	_, err = file.WriteString(timestamp)
+	if err != nil {
+		return fmt.Errorf("failed to write to lock file: %w", err)
+	}
+
+	return nil
+}
+
+func waitForLockFileRemoval(ctx context.Context) error {
+	// Check if the lock file exists
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			// Check if the lock file still exists
+			_, err := os.Stat(lockFilePath)
+			if os.IsNotExist(err) {
+				// Lock file has been removed, update is complete
+				return nil
+			}
+			// Wait a bit before checking again
+			time.Sleep(1 * time.Second)
+		}
+	}
 }
 
 func monitorAndResetDashboardReady(ctx context.Context) error {
