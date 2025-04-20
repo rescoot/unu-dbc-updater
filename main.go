@@ -52,7 +52,16 @@ func main() {
 	}
 	fmt.Println("Dashboard ready state monitoring finished.")
 
-	// Step 5: Placeholder for update process
+	// Step 5: Set BLE pin-code to UPDATE
+	fmt.Println("Setting BLE pin-code to UPDATE...")
+	err = setBLEPinCodeToUpdate(ctx)
+	if err != nil {
+		fmt.Printf("Error setting BLE pin-code: %v\n", err)
+		// Continue with the update process even if this fails
+	}
+	fmt.Println("BLE pin-code set to UPDATE.")
+
+	// Step 6: Run the update process
 	fmt.Println("Starting update process (Placeholder)...")
 	// TODO: Integrate SMUT or other update mechanism
 
@@ -60,7 +69,16 @@ func main() {
 	time.Sleep(5 * time.Second)
 	fmt.Println("Update process finished (Simulated).")
 
-	// Step 6: Turn off DBC
+	// Step 7: Clear BLE pin-code
+	fmt.Println("Clearing BLE pin-code...")
+	err = clearBLEPinCode(ctx)
+	if err != nil {
+		fmt.Printf("Error clearing BLE pin-code: %v\n", err)
+		// Continue with the shutdown process even if this fails
+	}
+	fmt.Println("BLE pin-code cleared.")
+
+	// Step 8: Turn off DBC
 	fmt.Println("Turning off DBC...")
 	err = turnOffDBC()
 	if err != nil {
@@ -69,7 +87,7 @@ func main() {
 	}
 	fmt.Println("DBC turned off.")
 
-	// Step 7: Restart vehicle service
+	// Step 9: Restart vehicle service
 	fmt.Println("Restarting vehicle service...")
 	err = restartVehicleService()
 	if err != nil {
@@ -146,12 +164,42 @@ func restartVehicleService() error {
 	return nil
 }
 
-func monitorAndResetDashboardReady(ctx context.Context) error {
-	rdb := redis.NewClient(&redis.Options{
+// Create a Redis client with the standard configuration
+func createRedisClient() *redis.Client {
+	return redis.NewClient(&redis.Options{
 		Addr:     "192.168.7.1:6379", // Redis address
 		Password: "",                 // no password set
 		DB:       0,                  // use default DB
 	})
+}
+
+func setBLEPinCodeToUpdate(ctx context.Context) error {
+	rdb := createRedisClient()
+	defer rdb.Close()
+
+	// Set the BLE pin-code to UPDATE
+	err := rdb.HSet(ctx, "ble", "pin-code", "UPDATE").Err()
+	if err != nil {
+		return fmt.Errorf("failed to set BLE pin-code to UPDATE: %w", err)
+	}
+	return nil
+}
+
+func clearBLEPinCode(ctx context.Context) error {
+	rdb := createRedisClient()
+	defer rdb.Close()
+
+	// Delete the pin-code field from the ble hash
+	err := rdb.HDel(ctx, "ble", "pin-code").Err()
+	if err != nil {
+		return fmt.Errorf("failed to clear BLE pin-code: %w", err)
+	}
+	return nil
+}
+
+func monitorAndResetDashboardReady(ctx context.Context) error {
+	rdb := createRedisClient()
+	defer rdb.Close()
 
 	// Use a Pub/Sub subscriber to listen for changes to the dashboard key
 	pubsub := rdb.Subscribe(ctx, "dashboard") // Subscribe to the dashboard channel
