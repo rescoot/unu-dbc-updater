@@ -20,3 +20,6 @@ go.work.sum
 # Editor directories
 .idea/
 .vscode/
+
+/dbc-updater-armv7l
+/dbc-updater
