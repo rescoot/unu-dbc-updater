@@ -60,12 +60,16 @@ func main() {
 
 	// Step 5: Set BLE pin-code to UPDATE
 	fmt.Println("Setting BLE pin-code to UPDATE...")
-	err = setBLEPinCodeToUpdate(ctx)
+	// Create a new context with a longer timeout for Redis operations
+	redisCtx, redisCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer redisCancel()
+	err = setBLEPinCodeToUpdate(redisCtx)
 	if err != nil {
 		fmt.Printf("Error setting BLE pin-code: %v\n", err)
 		// Continue with the update process even if this fails
+	} else {
+		fmt.Println("BLE pin-code set to UPDATE.")
 	}
-	fmt.Println("BLE pin-code set to UPDATE.")
 
 	// Step 6: Create lock file
 	fmt.Println("Creating update lock file...")
@@ -103,12 +107,16 @@ func main() {
 
 	// Step 9: Clear BLE pin-code
 	fmt.Println("Clearing BLE pin-code...")
-	err = clearBLEPinCode(ctx)
+	// Create a new context with a longer timeout for Redis operations
+	redisCtx2, redisCancel2 := context.WithTimeout(context.Background(), 5*time.Second)
+	defer redisCancel2()
+	err = clearBLEPinCode(redisCtx2)
 	if err != nil {
 		fmt.Printf("Error clearing BLE pin-code: %v\n", err)
 		// Continue with the shutdown process even if this fails
+	} else {
+		fmt.Println("BLE pin-code cleared.")
 	}
-	fmt.Println("BLE pin-code cleared.")
 
 	// Step 10: Turn off DBC
 	fmt.Println("Turning off DBC...")
@@ -201,9 +209,12 @@ func restartVehicleService() error {
 // Create a Redis client with the standard configuration
 func createRedisClient() *redis.Client {
 	return redis.NewClient(&redis.Options{
-		Addr:     "192.168.7.1:6379", // Redis address
-		Password: "",                 // no password set
-		DB:       0,                  // use default DB
+		Addr:         "192.168.7.1:6379", // Redis address
+		Password:     "",                 // no password set
+		DB:           0,                  // use default DB
+		DialTimeout:  2 * time.Second,    // Connection timeout
+		ReadTimeout:  2 * time.Second,    // Read timeout
+		WriteTimeout: 2 * time.Second,    // Write timeout
 	})
 }
 
