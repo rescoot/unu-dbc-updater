@@ -43,7 +43,11 @@ func main() {
 
 	// Step 3: Turn on DBC
 	fmt.Println("Turning on DBC...")
-	turnOnDBC()
+	err = turnOnDBC()
+	if err != nil {
+		fmt.Printf("Error turning on DBC: %v\n", err)
+		// Continue with the update process even if this fails
+	}
 	fmt.Println("DBC turned on.")
 
 	// Step 4: Monitor and reset dashboard ready state
@@ -120,10 +124,23 @@ func main() {
 
 	// Step 10: Turn off DBC
 	fmt.Println("Turning off DBC...")
-	turnOffDBC()
+	err = turnOffDBC()
+	if err != nil {
+		fmt.Printf("Error turning off DBC: %v\n", err)
+		// Continue with the shutdown process even if this fails
+	}
 	fmt.Println("DBC turned off.")
 
-	// Step 11: Restart vehicle service
+	// Step 11: Unexport GPIO
+	fmt.Println("Unexporting GPIO...")
+	err = unexportGPIO()
+	if err != nil {
+		fmt.Printf("Error unexporting GPIO: %v\n", err)
+		// Continue with the restart process even if this fails
+	}
+	fmt.Println("GPIO unexported.")
+
+	// Step 12: Restart vehicle service
 	fmt.Println("Restarting vehicle service...")
 	err = restartVehicleService()
 	if err != nil {
@@ -277,6 +294,15 @@ func waitForLockFileRemoval(ctx context.Context) error {
 			time.Sleep(1 * time.Second)
 		}
 	}
+}
+
+func unexportGPIO() error {
+	// Unexport GPIO pin 50
+	err := os.WriteFile("/sys/class/gpio/unexport", []byte("50"), 0644)
+	if err != nil {
+		return fmt.Errorf("failed to unexport GPIO 50: %w", err)
+	}
+	return nil
 }
 
 func monitorAndResetDashboardReady(ctx context.Context) error {
